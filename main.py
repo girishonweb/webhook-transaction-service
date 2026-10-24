@@ -165,7 +165,7 @@ UI_HTML = """
       </div>
       <div class="row">
         <button onclick="sendOne()">Send webhook</button>
-        <button class="sec" onclick="sendDuplicates()">Send 5 duplicates</button>
+        <button class="sec" onclick="startPolling()">Track status</button>
       </div>
     </div>
 
