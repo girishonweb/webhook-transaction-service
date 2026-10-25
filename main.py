@@ -23,7 +23,8 @@ class TransactionWebhook(BaseModel):
 
 
 async def worker(pool: asyncpg.Pool):
-    """Polls DB; processes rows older than 30s. DB is the queue, so restarts lose nothing."""
+    """Polls DB every second; processes rows older than 30s.
+    The DB is the queue, so restarts and crashes never lose a transaction."""
     while True:
         try:
             async with pool.acquire() as conn:
@@ -69,7 +70,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, title="Transaction Webhook Service")
 
 
-@app.get("/")
+# GET + HEAD: uptime monitors and Render health probes use HEAD
+@app.api_route("/", methods=["GET", "HEAD"])
 async def health():
     return {
         "status": "HEALTHY",
@@ -130,7 +132,7 @@ UI_HTML = """
   .card h2 { font-size:14px; margin:0 0 12px; color:var(--mut); text-transform:uppercase; letter-spacing:.05em; }
   label { display:block; color:var(--mut); font-size:12px; margin:8px 0 2px; }
   input { width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--line); border-radius:6px; color:var(--txt); }
-  .row { display:flex; gap:8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
   button { padding:8px 12px; border:0; border-radius:6px; background:var(--acc); color:#fff; cursor:pointer; font-weight:600; margin-top:12px; }
   button.sec { background:#2a2f3a; }
   .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-weight:700; font-size:13px; }
@@ -165,15 +167,15 @@ UI_HTML = """
       </div>
       <div class="row">
         <button onclick="sendOne()">Send webhook</button>
-        <button class="sec" onclick="startPolling()">Track status</button>
         <button class="sec" onclick="sendDuplicates()">Send 5 duplicates</button>
+        <button class="sec" onclick="startPolling()">Track status</button>
       </div>
     </div>
 
     <div class="card">
       <h2>2. Transaction status</h2>
       <span id="badge" class="badge NONE">NO TRANSACTION</span>
-      <div class="kv" id="details">Send a webhook to start tracking it.</div>
+      <div class="kv" id="details">Send a webhook, or paste an ID and click Track status.</div>
     </div>
   </div>
 
@@ -239,10 +241,12 @@ function startPolling() {
 
 async function poll() {
   const id = $('tid').value.trim();
+  if (!id) return;
   const r = await fetch('/v1/transactions/' + encodeURIComponent(id));
   if (r.status === 404) {
     $('badge').className = 'badge NONE';
     $('badge').textContent = 'NOT FOUND';
+    $('details').textContent = 'No transaction with this ID yet.';
     return;
   }
   const t = (await r.json())[0];
